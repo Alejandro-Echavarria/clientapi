@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('access_tokens', function (Blueprint $table) {
 
             $table->id();
-            $table->unsignedBigInterger('service_id'); // ID del usuario en la base de datos de la API
+            $table->unsignedBigInteger('service_id'); // ID del usuario en la base de datos de la API
             $table->text('access_token');
             $table->text('refresh_token');
             $table->dateTime('expires_at');

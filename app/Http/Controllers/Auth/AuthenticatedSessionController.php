@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\User;
 use App\Providers\RouteServiceProvider;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\Http;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -23,11 +25,57 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(Request $request)
     {
-        $request->authenticate();
+        $request->validate([
+            'email'    => 'required|string|email',
+            'password' => 'required|string',
+        ]);
 
-        $request->session()->regenerate();
+        $response = Http::withHeaders([
+
+            'Accept' => 'application/json'
+
+        ])->post('http://api.test/v1/login', [
+
+            'email'    => $request->email,
+            'password' => $request->password
+        ]);
+
+        if ($response->status() == 404) {
+            return back()->withErrors(['email' => 'These credentials do not match with our records.']);
+        }
+
+        $service = $response->json();
+
+        $user = User::updateOrCreate(['email' => $request->email], $service['data']);
+
+        if (!$user->accessToken) {
+
+            $response = Http::withHeaders([
+    
+                'Accept' => 'application/json'
+    
+            ])->post('http://api.test/oauth/token', [
+    
+                'grant_type'    => 'password',
+                'client_id'     => config('services.api.client_id'),
+                'client_secret' => config('services.api.client_secret'),
+                'username'      => $request->email,
+                'password'      => $request->password
+            ]);
+    
+            $access_token = $response->json();
+    
+            $user->accessToken()->create([
+                'service_id'    => $service['data']['id'],
+                'access_token'  => $access_token['access_token'],
+                'refresh_token' => $access_token['refresh_token'],
+                'expires_at'    => now()->addSecond($access_token['expires_in'])
+            ]);
+        }
+
+        Auth::login($user, $request->remember);
 
         return redirect()->intended(RouteServiceProvider::HOME);
     }
