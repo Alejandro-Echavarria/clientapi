@@ -13,9 +13,13 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\Http;
+use App\Traits\Token;
 
 class RegisteredUserController extends Controller
 {
+
+    use Token;
+
     /**
      * Display the registration view.
      */
@@ -54,27 +58,7 @@ class RegisteredUserController extends Controller
             'email' => $request->email,
         ]);
 
-        $response = Http::withHeaders([
-
-            'Accept' => 'application/json'
-
-        ])->post('http://api.test/oauth/token', [
-
-            'grant_type'    => 'password',
-            'client_id'     => config('services.api.client_id'),
-            'client_secret' => config('services.api.client_secret'),
-            'username'      => $request->email,
-            'password'      => $request->password
-        ]);
-
-        $access_token = $response->json();
-
-        $user->accessToken()->create([
-            'service_id'    => $service['data']['id'],
-            'access_token'  => $access_token['access_token'],
-            'refresh_token' => $access_token['refresh_token'],
-            'expires_at'    => now()->addSecond($access_token['expires_in'])
-        ]);
+        $this->getAccessToken($user, $service);
 
         event(new Registered($user));
 
